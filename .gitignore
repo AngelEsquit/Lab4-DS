@@ -1,0 +1,22 @@
+# Datos crudos descargados de Copernicus (pesados, reproducibles con el notebook)
+data/
+*.tif
+*.tiff
+
+# Rasters de indices por fecha (~55 MB, los regenera el notebook desde data/).
+# Si se versionan las tablas .csv, las huellas de cada lago y su geo-referencia.
+outputs/*/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
