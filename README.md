@@ -9,7 +9,7 @@ de Sentinel Hub.
 
 ## Integrantes
 - Javier España #23361
-- Ángel Esquit #23221
+- Angel Esquit #23221
 - Roberto Barreda #23354
 
 ## Setup
