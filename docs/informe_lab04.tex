@@ -1,0 +1,553 @@
+% ──────────────────────────────────────────────────────────────────────────────
+%  Informe Lab 4 — Análisis de Datos Geoespaciales
+%  CC3084 Data Science · Universidad del Valle de Guatemala · Semestre II 2026
+%  Autores: Roberto Barreda (23354), Javier España (23361), Ángel Esquit (23221)
+%
+%  INSTRUCCIONES PARA COMPILAR:
+%    pdflatex informe_lab04.tex
+%    pdflatex informe_lab04.tex   (segunda pasada para referencias)
+%
+%  Figuras esperadas en docs/figs/ (generadas al exportar desde el notebook):
+%    mapa_lagos.png            - mapa folium de ubicación (captura)
+%    mapa_indices_*.png        - paneles color real / mascara / NDCI / Chl-a
+%    serie_temporal.png        - gráfico de línea Chl-a por lago
+%    comparacion_chla_ndwi.png - gráfico log + boxplot + % área alta
+%    correlacion.png           - scatter Chl-a vs NDVI / NDWI
+%    comparacion_lagos.png     - comparación intensidad y frecuencia
+%    extension_espacial.png    - % lago sobre 30 mg/m³ por fecha
+%    zonas_persistentes.png    - mapa de Chl-a promedio por píxel
+%    boxplots_fechas.png       - distribución estadística entre fechas
+%    estacionalidad.png        - boxplot seca vs lluviosa
+% ──────────────────────────────────────────────────────────────────────────────
+
+\documentclass[12pt, a4paper]{article}
+
+% ── Paquetes ──────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{microtype}
+\usepackage{setspace}
+
+\geometry{
+  top=2.5cm, bottom=2.5cm,
+  left=3cm,  right=2.5cm,
+}
+
+% ── Colores institucionales ───────────────────────────────────────────────────
+\definecolor{uvgblue}{RGB}{0, 56, 101}
+\definecolor{atitlanblue}{RGB}{31, 119, 180}
+\definecolor{amatitlanred}{RGB}{214, 39, 40}
+\definecolor{alertred}{RGB}{192, 0, 0}
+\definecolor{lightgray}{gray}{0.93}
+
+% ── Estilo de secciones ───────────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries\color{uvgblue}}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{uvgblue}}{}{0em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{}{0em}{}
+
+% ── Encabezado / pie de página ────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{uvgblue}CC3084 Data Science · Lab 4 · UVG 2026}
+\fancyhead[R]{\small\color{uvgblue}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Hipervínculos ─────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=uvgblue,
+  urlcolor=uvgblue,
+  citecolor=uvgblue,
+  pdftitle={Lab 4 — Análisis de Datos Geoespaciales},
+  pdfauthor={Barreda · España · Esquit},
+}
+
+% ── Utilidades ────────────────────────────────────────────────────────────────
+\newcommand{\lago}[1]{\textbf{#1}}
+\newcommand{\indice}[1]{\texttt{#1}}
+\newcommand{\mgm}{\,mg/m$^3$}
+\newcommand{\kmsq}{\,km$^2$}
+\newcommand{\nota}[1]{\vspace{2pt}\noindent\colorbox{lightgray}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{\small\textit{#1}}}\vspace{4pt}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+% ── Portada ───────────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{1cm}
+  {\color{uvgblue}\rule{\linewidth}{2pt}}\vspace{8pt}
+
+  {\LARGE\bfseries\color{uvgblue}
+    Monitoreo de Floraciones de Cianobacterias\\[6pt]
+    en los Lagos Atitlán y Amatitlán\\[4pt]
+    mediante Imágenes Sentinel-2
+  }\vspace{10pt}
+
+  {\color{uvgblue}\rule{\linewidth}{1pt}}\vspace{14pt}
+
+  {\large Laboratorio 4 — Análisis de Datos Geoespaciales}\vspace{4pt}
+
+  {\normalsize CC3084 Data Science}\vspace{2pt}
+
+  {\normalsize Universidad del Valle de Guatemala}\vspace{2pt}
+
+  {\normalsize Facultad de Ingeniería · Semestre II 2026}\vspace{20pt}
+
+  \begin{tabular}{ll}
+    \textbf{Autores:} & Roberto Barreda \quad (23354) \\
+                      & Javier España    \quad (23361) \\
+                      & Ángel Esquit   \quad (23221)
+  \end{tabular}\vspace{20pt}
+
+  {\normalsize Fecha de entrega: 16 de agosto de 2026}\vspace{10pt}
+
+  {\color{uvgblue}\rule{\linewidth}{2pt}}
+
+  \vfill
+  \nota{Este informe está dirigido a profesionales ambientalistas. Los conceptos técnicos de teledetección y programación se explican en lenguaje accesible.}
+\end{titlepage}
+
+% ── Resumen ejecutivo ─────────────────────────────────────────────────────────
+\section*{Resumen}
+\addcontentsline{toc}{section}{Resumen}
+
+Este informe presenta los resultados del monitoreo satelital de floraciones de cianobacterias
+en los lagos \lago{Atitlán} y \lago{Amatitlán} de Guatemala, usando 11 imágenes
+Sentinel-2 por lago tomadas entre enero de 2025 y julio de 2026.
+
+Los resultados muestran una diferencia de régimen, no de grado, entre ambos cuerpos de agua:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \lago{Amatitlán} presenta eutrofia crónica (18.4\mgm{} en promedio; máximo 60.2\mgm{}
+        el 2026-06-19, cuando el 76.6\,\% del lago superó el umbral de floración densa).
+  \item \lago{Atitlán} permanece en buen estado a escala de lago (3.5\mgm{} en promedio),
+        pero muestra focos puntuales intensos en bahías cercanas a centros poblados.
+\end{itemize}
+
+\tableofcontents
+\newpage
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Introducción y contexto ambiental}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+Las \textbf{cianobacterias} son microorganismos fotosintéticos que proliferan cuando el agua
+reúne tres condiciones: temperatura elevada, abundancia de nutrientes (nitrógeno y fósforo) y
+estancamiento. Cuando forman ``floraciones'' pueden producir toxinas que afectan la salud humana
+y animal, matan peces, generan olores desagradables y devalúan zonas turísticas y de pesca.
+
+Los lagos \lago{Atitlán} y \lago{Amatitlán} son casos emblemáticos en Guatemala:
+
+\begin{description}[leftmargin=1.5em, font=\bfseries]
+  \item[Lago Atitlán] Se ubica en el altiplano occidental, dentro de una caldera volcánica de
+        más de 300\,m de profundidad. Tiene una superficie de $\sim$130\kmsq{} y es uno de los
+        destinos turísticos más visitados del país. Su primera floración masiva documentada ocurrió
+        en 2009 y generó alarma internacional.
+  \item[Lago Amatitlán] Es un lago mucho más pequeño ($\sim$15.2\kmsq) y somero ($\sim$33\,m),
+        ubicado a menos de 25\,km al sur de la Ciudad de Guatemala. Recibe el río Villalobos,
+        que drena buena parte del área metropolitana (unos 3 millones de habitantes). Su estado
+        de deterioro es crónico y bien documentado desde hace décadas.
+\end{description}
+
+El monitoreo físico de estos lagos es costoso y limitado en cobertura espacial. Los satélites
+\textbf{Sentinel-2} del programa europeo Copernicus ofrecen imágenes multiespectrales de 20\,m
+de resolución que permiten calcular índices de calidad del agua de forma sistemática y gratuita.
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Metodología}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\subsection{Datos utilizados}
+
+Se usaron las 11 fechas oficiales por lago proporcionadas por el enunciado, todas con
+nubosidad baja ($<$15\,\%). Para cada fecha y lago se descargaron únicamente las bandas
+espectrales necesarias para los índices solicitados (9 bandas por imagen, resolución 20\,m),
+reduciendo el volumen de descarga respecto a una escena completa.
+
+\begin{table}[H]
+\centering
+\caption{Fechas de adquisición por lago}
+\begin{tabular}{ll}
+\toprule
+\textbf{Amatitlán} & \textbf{Atitlán} \\
+\midrule
+2025-01-28, 2025-04-15, 2025-04-28 & 2025-01-18, 2025-04-13, 2025-05-13 \\
+2025-11-24, 2026-01-08, 2026-02-02 & 2025-07-17, 2025-11-21, 2025-12-29 \\
+2026-02-07$^*$, 2026-03-29, 2026-04-13 & 2026-02-12, 2026-03-24, 2026-04-13 \\
+2026-04-28, 2026-06-19 & 2026-04-28, 2026-07-22 \\
+\bottomrule
+\multicolumn{2}{l}{\small $^*$ Cobertura válida parcial ($\sim$57\,\%); incluida porque el lago está completamente cubierto.}
+\end{tabular}
+\end{table}
+
+\subsection{Índices calculados}
+
+\subsubsection{Índice de cianobacteria (Chl-a)}
+
+Se reprodujo en Python el \emph{Cyano Detection Script} (\texttt{cyanobacteria\_chla\_ndci\_l1c})
+publicado en \href{https://custom-scripts.sentinel-hub.com}{custom-scripts.sentinel-hub.com}
+(CyanoLakes, Kravitz \& Matthews 2020). El índice NDCI (Normalized Difference Chlorophyll Index)
+relaciona la banda del ``borde rojo'' con la del rojo:
+
+\[
+  \text{NDCI} = \frac{B05 - B04}{B05 + B04}
+\]
+
+La conversión a clorofila-a en mg/m$^3$ usa el polinomio cúbico calibrado por los autores:
+\[
+  \text{Chl-a} = 826.57\,\text{NDCI}^3 - 176.43\,\text{NDCI}^2 + 19\,\text{NDCI} + 4.071
+\]
+
+Los valores se recortan al rango de calibración declarado (0--500\mgm).
+
+\subsubsection{NDVI y NDWI}
+
+\[
+  \text{NDVI} = \frac{B08 - B04}{B08 + B04} \qquad
+  \text{NDWI} = \frac{B03 - B08}{B03 + B08}
+\]
+
+El NDVI mide biomasa vegetal; el NDWI, la presencia de agua superficial (valores positivos
+indican agua). Ambos se calcularon sobre los píxeles clasificados como agua.
+
+\subsection{Máscara de agua y huella del lago}
+
+Para evitar confundir suelo húmedo o sombras urbanas con agua se aplicó la función
+\texttt{wbi()} del script, que combina seis criterios espectrales (MNDWI, NDWI, AWEI\textsubscript{sh},
+AWEI\textsubscript{nsh}, NDVI, NDWI\textsubscript{hojas}).
+
+Dado que la máscara varía ligeramente entre fechas (la floración densa cambia el espectro del
+agua y puede excluir píxeles con cianobacterias), se construyó una \textbf{huella estable}:
+los píxeles clasificados como agua en al menos el 30\,\% de las fechas, cerrados morfológicamente
+y reducidos al cuerpo principal. Todas las mediciones temporales usan esta huella fija como
+denominador.
+
+\subsection{Control de calidad}
+
+Las fechas en que menos del 70\,\% de la huella tiene datos válidos se marcan como
+\emph{no confiables} y se excluyen del análisis temporal. Solo Atitlán 2025-01-18 fue
+descartada: la corrección atmosférica sobre el agua ultraoscura de la caldera generó
+reflectancias negativas en el rojo y el borde rojo, haciendo que el NDCI fuese
+indeterminado para el 76\,\% del lago. Sin ese filtro la imagen habría reportado una
+media de $\sim$30\,000\mgm, arruinando la serie temporal completa.
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Resultados}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+% ── 3.1 Ubicación y área de estudio ──────────────────────────────────────────
+\subsection{Ubicación de los lagos}
+
+El mapa interactivo generado con \texttt{folium} (Figura~\ref{fig:mapa_lagos}) muestra la
+posición geográfica de ambos lagos y los recuadros de descarga de cada imagen.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\begin{minipage}{0.85\linewidth}\centering\vspace{1.2cm}
+    \textit{[Captura del mapa folium interactivo.\\
+    Ejecutar la celda de ubicación del notebook y guardar como PNG en docs/figs/mapa\_lagos.png]}
+    \vspace{1.2cm}
+  \end{minipage}}
+  \caption{Posición de los lagos Atitlán y Amatitlán en Guatemala, con sus \emph{bounding boxes} de descarga de imágenes Sentinel-2.}
+  \label{fig:mapa_lagos}
+\end{figure}
+
+% ── 3.2 Mapas por fecha ───────────────────────────────────────────────────────
+\subsection{Índice de cianobacteria por fecha (Ejercicio 3)}
+
+Para cada lago se generaron mapas de cuatro paneles (color real, máscara de agua, NDCI y
+Chl-a con la rampa de color oficial). La Figura~\ref{fig:mapas_indices} muestra la fecha
+más limpia y la del pico de floración de cada lago.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{\linewidth}
+    \fbox{\begin{minipage}{\linewidth}\centering\vspace{1cm}
+      \textit{[mapa\_indices\_amatitlan\_limpia.png — fecha más limpia de Amatitlán]}
+      \vspace{1cm}
+    \end{minipage}}
+    \caption{Amatitlán — fecha con menor Chl-a (agua relativamente limpia).}
+  \end{subfigure}
+
+  \vspace{6pt}
+
+  \begin{subfigure}{\linewidth}
+    \fbox{\begin{minipage}{\linewidth}\centering\vspace{1cm}
+      \textit{[mapa\_indices\_amatitlan\_pico.png — 2026-06-19, pico de floración]}
+      \vspace{1cm}
+    \end{minipage}}
+    \caption{Amatitlán — 2026-06-19: floración generalizada en el 76.6\,\% del lago.}
+  \end{subfigure}
+
+  \caption{Paneles de color real / máscara de agua / NDCI / Chl-a para Lago Amatitlán.
+           Azul = agua limpia; verde-amarillo = biomasa moderada; naranja-rojo = floración densa.}
+  \label{fig:mapas_indices}
+\end{figure}
+
+% ── 3.3 Análisis temporal ─────────────────────────────────────────────────────
+\subsection{Análisis temporal — evolución de la clorofila-a (Ejercicio 4)}
+
+\subsubsection{Lago Amatitlán}
+
+Las 11 fechas dan una media de \textbf{18.4\mgm} (desviación estándar: 15.2\mgm{}),
+entre 5.9\mgm{} (2026-02-02) y \textbf{60.2\mgm{} el 2026-06-19} — una variación
+de 10\,× dentro del mismo período. El nivel de fondo \emph{nunca} baja de 5.9\mgm:
+no hay ninguna fecha en que Amatitlán se pueda considerar limpio. En promedio, el
+\textbf{15.6\,\%} de su superficie supera los 30\mgm{}.
+
+El criterio de pico (media + 1$\sigma$, umbral = 33.6\mgm) señala una única fecha
+crítica: \textbf{2026-06-19}, con 60.2\mgm{} de promedio y el 76.6\,\% del lago en
+estado de floración densa. Le siguen, sin alcanzar el umbral, 2026-04-28 (25.5\mgm) y
+2026-01-08 (24.2\mgm).
+
+\subsubsection{Lago Atitlán}
+
+Las 10 fechas confiables muestran una Chl-a de \textbf{3.48 ± 0.46\mgm{}}, variando
+entre 2.49 y 3.96\mgm{}: una variación total de 1.6\,×. En promedio, solo el
+\textbf{0.22\,\%} de la superficie supera los 30\mgm. A escala de lago,
+\emph{Atitlán no presenta floraciones} en el período estudiado.
+
+Los dos ``picos'' estadísticos detectados (2025-07-17 y 2026-07-22) superan el umbral
+por centésimas y están dentro del ruido de la serie. Lo que sí aparecen son focos
+\textbf{pequeños e intensos} en las bahías: en 2025-11-21 el máximo por píxel llegó
+al tope de la escala (500\mgm) con el 1.0\,\% del lago ($\sim$1.2\kmsq) afectado.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\begin{minipage}{0.9\linewidth}\centering\vspace{2cm}
+    \textit{[serie\_temporal.png — gráfico de línea Chl-a por lago con umbrales de pico]}
+    \vspace{2cm}
+  \end{minipage}}
+  \caption{Evolución temporal de la clorofila-a media por lago y fecha. Los círculos vacíos marcan los picos de floración (media + 1$\sigma$). Las cruces grises indican fechas descartadas por cobertura insuficiente. La línea discontinua es el umbral de pico de cada lago.}
+  \label{fig:serie_temporal}
+\end{figure}
+
+% ── 3.4 Análisis espacial ────────────────────────────────────────────────────
+\subsection{Análisis espacial — distribución dentro del lago (Ejercicio 5)}
+
+\subsubsection{Amatitlán}
+
+El foco de mayor Chl-a se concentra sistemáticamente en el sector \textbf{norte y noreste}
+del lago, cerca de la desembocadura del río Villalobos. En el pico del 2026-06-19 la
+floración es prácticamente uniforme en todo el espejo de agua (razón mediana/media = 0.98).
+En fechas de floraciones en parches (p.ej., 2026-04-28, razón 0.41) el mapa muestra manchas
+localizadas junto a las entradas de afluentes.
+
+\subsubsection{Atitlán}
+
+El mapa de color es predominantemente azul ($<$5\mgm), pero aparecen focos puntuales e
+intensos en las bahías de Santiago Atitlán, San Pedro La Laguna y Panajachel — municipios
+con mayor actividad humana y descarga de aguas residuales. El centro del lago permanece limpio.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\begin{minipage}{0.9\linewidth}\centering\vspace{2cm}
+    \textit{[comparacion\_cuadricula\_amatitlan.png — grid comparativo de todas las fechas]}
+    \vspace{2cm}
+  \end{minipage}}
+  \caption{Cuadrícula comparativa de clorofila-a en todas las fechas de Amatitlán (bordes rojos = pico de floración). La misma huella fija se usa en todas las fechas para que la comparación sea justa.}
+  \label{fig:grid_amatitlan}
+\end{figure}
+
+% ── 3.5 Correlación de índices ───────────────────────────────────────────────
+\subsection{Correlación de índices NDVI y NDWI con la cianobacteria (Ejercicio 6)}
+
+\begin{table}[H]
+\centering
+\caption{Coeficientes de correlación de Pearson (fechas confiables)}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Lago} & \textbf{r(NDVI vs Chl-a)} & \textbf{p-valor} & \textbf{r(NDWI vs Chl-a)} & \textbf{p-valor} \\
+\midrule
+Amatitlán & positiva moderada–alta & $< 0.05$ & negativa moderada–alta & $< 0.05$ \\
+Atitlán   & muy débil              & $> 0.05$ & muy débil              & $> 0.05$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretación.} En \lago{Amatitlán} la correlación positiva NDVI--Chl-a confirma que
+las algas elevan la reflectancia en el infrarrojo respecto al rojo. La correlación negativa
+NDWI--Chl-a es esperada: el agua cargada de pigmentos absorbe diferente al agua limpia. Los tres
+índices apuntan en la misma dirección y cualquiera sirve como indicador de deterioro.
+
+En \lago{Atitlán} las correlaciones son débiles porque la Chl-a varía muy poco a escala de lago
+($\sigma = 0.46\mgm$): el ruido de medición enmascara la señal. A escala de píxel en las bahías
+afectadas, la relación probablemente sí se mantiene, pero el promedio del lago la diluye.
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Comparación entre los lagos (Ejercicio 7)}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+\centering
+\caption{Comparación de indicadores entre ambos lagos (período enero 2025–julio 2026)}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Indicador} & \textbf{Amatitlán} & \textbf{Atitlán} & \textbf{Razón} \\
+\midrule
+Chl-a media período      & 18.4\mgm    & 3.5\mgm    & \textbf{5.3×} \\
+Chl-a máxima por fecha   & 60.2\mgm    & 4.0\mgm    & \textbf{15.1×} \\
+Superficie sobre 30\mgm  & 15.6\,\%    & 0.22\,\%   & \textbf{70×} \\
+Variación entre fechas   & 10.2×       & 1.6×       & — \\
+N.º de picos detectados  & 1           & 2*         & — \\
+Superficie huella        & 13.8\kmsq   & 120.8\kmsq & 0.11× \\
+\bottomrule
+\multicolumn{4}{l}{\small * Picos estadísticos dentro del ruido, no eventos ecológicos de escala de lago.}
+\end{tabular}
+\end{table}
+
+\subsection{Causas de las diferencias}
+
+\begin{table}[H]
+\centering
+\caption{Factores que explican la diferencia entre lagos}
+\begin{tabular}{lll}
+\toprule
+\textbf{Factor} & \textbf{Amatitlán} & \textbf{Atitlán} \\
+\midrule
+Profundidad media   & $\sim$33 m           & $>$188 m \\
+Principal afluente  & Río Villalobos       & Ríos menores y lluvia \\
+Presión urbana      & Muy alta ($\sim$3 M hab.) & Moderada \\
+Régimen trófico     & Hipereutrófico       & Oligo-mesotrófico \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\lago{Amatitlán} recibe el drenaje de gran parte del área urbana de la Ciudad de Guatemala
+a través del río Villalobos: una carga de nitrógeno y fósforo que su pequeño volumen no puede
+diluir. El resultado es eutrofia crónica con un nivel de fondo que nunca baja de 5.9\mgm{} y
+un pico de 60.2\mgm{} al inicio de la época lluviosa.
+
+\lago{Atitlán} cuenta con la ventaja de su enorme profundidad (más de 300\,m en el centro de
+la caldera): el volumen es tan grande que los nutrientes se diluyen antes de acumularse. Sin
+embargo, los focos puntuales en bahías con descarga de aguas residuales muestran que la presión
+antrópica ya es visible localmente. Si esos aportes se intensifican con el crecimiento turístico,
+el deterioro podría acelerarse.
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Análisis exploratorio adicional (Ejercicio 8)}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\subsection{Extensión espacial de la floración}
+
+\begin{figure}[H]
+  \centering
+  \fbox{\begin{minipage}{0.9\linewidth}\centering\vspace{1.5cm}
+    \textit{[extension\_espacial.png — \% del lago sobre 30 mg/m³ por fecha]}
+    \vspace{1.5cm}
+  \end{minipage}}
+  \caption{Porcentaje del espejo de agua de cada lago con valores de Chl-a superiores a 30\mgm{} por fecha. La línea discontinua marca el promedio del período.}
+  \label{fig:extension}
+\end{figure}
+
+El 2026-06-19 Amatitlán registra un 76.6\,\% de su superficie sobre el umbral de floración densa:
+no se trata de un foco localizado sino de una floración de lago completo. En Atitlán ninguna fecha
+supera el 1.5\,\% sobre ese umbral.
+
+\subsection{Zonas persistentes de acumulación}
+
+El mapa de clorofila-a promediada por píxel a lo largo de todas las fechas disponibles permite
+identificar las zonas donde la biomasa algal se acumula de forma recurrente (Figura~\ref{fig:zonas}).
+En Amatitlán el sector norte concentra los valores más altos. En Atitlán los focos persistentes
+corresponden a las bahías con mayor actividad humana.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\begin{minipage}{0.9\linewidth}\centering\vspace{2cm}
+    \textit{[zonas\_persistentes.png — mapa de Chl-a promedio por píxel]}
+    \vspace{2cm}
+  \end{minipage}}
+  \caption{Mapa de clorofila-a promedio por píxel (media de todas las fechas con datos disponibles). Los tonos más oscuros/rojos indican zonas con acumulación recurrente.}
+  \label{fig:zonas}
+\end{figure}
+
+\subsection{Distribución estadística de la clorofila-a}
+
+La distribución de Chl-a en Amatitlán es asimétrica a la derecha en casi todas las fechas
+(muchos píxeles con valores moderados y una cola hacia valores altos). En el pico del 2026-06-19
+la distribución se uniformiza (razón mediana/media = 0.98), señal de floración pareja en todo
+el lago. En Atitlán la distribución es siempre estrecha y centrada cerca de 3.5\mgm{}, con colas
+extremas en algunas fechas asociadas a los focos de bahía.
+
+\subsection{Patrón estacional}
+
+Separando las fechas en época seca (noviembre–abril) y lluviosa (mayo–octubre), Amatitlán
+promedia 14.3\mgm{} en seca frente a 60.2\mgm{} en lluviosa, y Atitlán 3.34 frente a 3.81\mgm{}.
+La dirección es la esperada: las lluvias lavan suelos agrícolas y calles, inyectando nutrientes
+a los lagos.
+
+\nota{Limitación estadística: Amatitlán solo tiene 1 fecha de época lluviosa en el conjunto de
+datos, y coincide con el pico más intenso del período. Con n=1 no se puede afirmar estacionalidad.
+Lo correcto es decir que la única imagen de época lluviosa disponible muestra la floración más
+intensa, lo cual es consistente con el mecanismo de lavado de nutrientes pero no lo demuestra.
+Confirmar el patrón estacional requeriría un muestreo mensual balanceado durante varios años.}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Conclusiones}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Amatitlán está en estado de eutrofia crónica.} Ninguna de las 11 fechas
+        estudiadas muestra el lago limpio. El pico del 2026-06-19 (76.6\,\% del lago en
+        floración densa, promedio de 60.2\mgm) es evidencia de un deterioro severo y urgente.
+
+  \item \textbf{Atitlán mantiene buena calidad a escala de lago}, pero los focos puntuales
+        en bahías cercanas a municipios con descarga de aguas residuales indican que la
+        presión antrópica ya es perceptible desde el satélite. El análisis espacial es
+        aquí la métrica clave; el promedio del lago enmascara estos eventos.
+
+  \item \textbf{La diferencia entre ambos lagos no es de grado sino de régimen.} Amatitlán
+        recibe en proporción mucho más carga de nutrientes respecto a su capacidad de dilución.
+        Atitlán aún dispone de margen, pero ese margen no es ilimitado.
+
+  \item \textbf{NDVI y NDWI refuerzan el diagnóstico en Amatitlán} (correlación significativa
+        con Chl-a), pero son insuficientes en Atitlán porque la variación a escala de lago es
+        demasiado pequeña para detectarla en el promedio. El análisis espacial a escala de píxel
+        es imprescindible para Atitlán.
+
+  \item \textbf{La teledetección no reemplaza el monitoreo en campo}, pero sí permite priorizar
+        cuándo y dónde concentrar los recursos de muestreo físico, con una cobertura espacial y
+        temporal que ningún equipo de campo puede igualar.
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section*{Referencias}
+\addcontentsline{toc}{section}{Referencias}
+% ═══════════════════════════════════════════════════════════════════════════════
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Kravitz, J. \& Matthews, M. (2020). \emph{Cyanobacteria Detection Script (cyanobacteria\_chla\_ndci\_l1c)}. Sentinel Hub Custom Scripts. \url{https://custom-scripts.sentinel-hub.com}
+
+  \item Drusch, M. et al. (2012). Sentinel-2: ESA's Optical High-Resolution Mission for GMES Operational Services. \emph{Remote Sensing of Environment}, 120, 25--36.
+
+  \item openEO platform. Copernicus Data Space Ecosystem. \url{https://openeo.dataspace.copernicus.eu}
+
+  \item Autoridad para el Manejo Sustentable del Lago de Amatitlán (AMSA). Informes de calidad del agua. \url{https://www.amsa.gob.gt}
+
+  \item Comité Nacional de Protección del Lago Atitlán (CONAP). Fichas de monitoreo ecológico.
+\end{itemize}
+
+\vfill
+\begin{center}
+  {\color{uvgblue}\rule{0.6\linewidth}{0.4pt}}\\[4pt]
+  {\small Universidad del Valle de Guatemala · CC3084 Data Science · Semestre II 2026}
+\end{center}
+
+\end{document}

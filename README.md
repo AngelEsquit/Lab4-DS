@@ -24,14 +24,17 @@ en el navegador, `openEO` guarda un *refresh token* y las siguientes ejecuciones
 
 ## Cómo ejecutar
 
-Abrir `Lab4_Datos_Geoespaciales.ipynb` y correrlo de arriba abajo. La primera ejecución descarga
-22 imágenes (~1 min cada una) a `data/`; las siguientes las reutilizan desde disco.
+Abrir `notebooks/Lab4_Datos_Geoespaciales.ipynb` y correrlo de arriba abajo con el kernel del
+entorno virtual (`.venv`). La primera ejecución autentica con Copernicus y descarga 22 imágenes
+(~1 min cada una) a `data/`; las siguientes reutilizan los archivos ya descargados.
+Los índices derivados y tablas de resultados quedan en `outputs/`.
 
 ## Estructura
 
 | Ruta | Contenido |
 |---|---|
-| `Lab4_Datos_Geoespaciales.ipynb` | Notebook con todo el análisis |
-| `data/` | GeoTIFF crudos de Copernicus — no se versionan, los genera el notebook |
-| `outputs/` | Índices derivados (`.npz`) y tablas de resultados (`.csv`) |
-| `docs/` | Informe entregable |
+| `notebooks/Lab4_Datos_Geoespaciales.ipynb` | Notebook principal — Ejercicios 1–8 |
+| `data/` | GeoTIFF crudos de Copernicus — **no versionados**, generados por el notebook |
+| `outputs/` | Huellas del lago (`.npz`), índices por fecha (`.npz`) y tablas (`.csv`) |
+| `docs/` | Informe entregable (`.tex` / `.pdf`) |
+| `requirements.txt` | Dependencias Python |
