@@ -3,9 +3,12 @@ data/
 *.tif
 *.tiff
 
-# Rasters de indices por fecha (~55 MB, los regenera el notebook desde data/).
-# Si se versionan las tablas .csv, las huellas de cada lago y su geo-referencia.
+# Rasters y datasets pesados de Machine Learning (>100MB)
 outputs/*/
+outputs/dataset_*.csv
+outputs/dataset_ml_parte2.csv
+
+# Tablas pequenas si se versionan, huellas y metadatos JSON/NPZ tambien
 
 # Python
 __pycache__/
